@@ -21,6 +21,14 @@ import { focusable } from '../../../focusable'; void focusable;
 import { FocusableOptions, InputSource } from '../../../nav';
 import { SettingsBackend } from '../../../backend/SettingsBackend';
 
+export interface HlsAudioTrackInfo {
+    id: number;
+    name: string;
+    lang?: string;
+    groupId?: string;
+    default: boolean;
+}
+
 interface VideoProps {
     onVideoDimensionsChanged: (width: number, height: number) => void;
     children: JSX.Element;
@@ -28,6 +36,9 @@ interface VideoProps {
     source?: SourceSelected;
     sourceQuality?: number;
     onPlayerQualityChanged?: (level: number) => void;
+    audioTrackId?: number;
+    onAudioTracksChanged?: (tracks: HlsAudioTrackInfo[]) => void;
+    onAudioTrackChanged?: (id: number) => void;
     onSettingsDialog?: (event: HTMLElement|undefined) => void;
     onFullscreenChange?: (isFullscreen: boolean) => void;
     onToggleSubtitles?: () => void;
@@ -664,6 +675,7 @@ const VideoPlayerView: Component<VideoProps> = (props) => {
         if (hlsPlayer) {
             hlsPlayer.destroy();
             hlsPlayer = undefined;
+            props.onAudioTracksChanged?.([]);
         }
 
         if (videoElement) {
@@ -967,6 +979,18 @@ const VideoPlayerView: Component<VideoProps> = (props) => {
                         props.onPlayerQualityChanged(data.level);
                 });
 
+                hlsPlayer.on(Hls.Events.AUDIO_TRACKS_UPDATED, function (_, data) {
+                    props.onAudioTracksChanged?.(data.audioTracks.map(t => ({
+                        id: t.id,
+                        name: t.name,
+                        lang: t.lang,
+                        groupId: t.groupId,
+                        default: t.default
+                    })));
+                });
+                hlsPlayer.on(Hls.Events.AUDIO_TRACK_SWITCHED, function (_, data) {
+                    props.onAudioTrackChanged?.(data.id);
+                });
                 hlsPlayer.on(Hls.Events.ERROR, function(eventName, data) {
                     console.error("HLS player error", data);
                     onError(`HLS Error: ${JSON.stringify({ details: data.details, error: data.error })}`, data.fatal);
@@ -1066,6 +1090,12 @@ const VideoPlayerView: Component<VideoProps> = (props) => {
         console.log("Source Quality changed: " + newLevel);
         if(hlsPlayer) {
             hlsPlayer!.currentLevel = newLevel && newLevel >= 0 && newLevel < hlsPlayer!.levels.length ? (hlsPlayer!.levels.length - newLevel) : -1;
+        }
+    });
+    createEffect(() => {
+        const id = props.audioTrackId;
+        if (hlsPlayer && id !== undefined && hlsPlayer.audioTracks.some(t => t.id === id) && hlsPlayer.audioTrack !== id) {
+            hlsPlayer.audioTrack = id;
         }
     });
 

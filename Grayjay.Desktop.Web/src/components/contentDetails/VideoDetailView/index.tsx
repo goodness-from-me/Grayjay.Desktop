@@ -16,7 +16,7 @@ import ic_close from '../../../assets/icons/icon24_close.svg';
 import store from '../../../assets/icons/icon24_store.svg';
 import more from '../../../assets/icons/icon_button_more.svg';
 import donate from '../../../assets/icons/icon24_donate.svg';
-import VideoPlayerView, { VideoPlayerViewHandle } from "../../player/VideoPlayerView";
+import VideoPlayerView, { VideoPlayerViewHandle, HlsAudioTrackInfo } from "../../player/VideoPlayerView";
 import { VideoMode, VideoState, useVideo } from "../../../contexts/VideoProvider";
 import ScrollContainer from "../../containers/ScrollContainer";
 import VirtualFlexibleArrayList from "../../containers/VirtualFlexibleArrayList";
@@ -180,6 +180,8 @@ const VideoDetailView: Component<VideoDetailsProps> = (props) => {
     const [videoSource$, setVideoSource] = createSignal<SourceSelected>();
     const [videoQuality$, setVideoQuality] = createSignal<number>(-1);
     const [playerQuality$, setPlayerQuality] = createSignal<number>(-1);
+    const [hlsAudioTracks$, setHlsAudioTracks] = createSignal<HlsAudioTrackInfo[]>([]);
+    const [hlsAudioTrackId$, setHlsAudioTrackId] = createSignal<number>();
 
     createEffect(on(currentVideoUrl$, (url) => {
         console.info("Reset error counter because video source changed", { url, errorCounter });
@@ -1069,6 +1071,27 @@ const VideoDetailView: Component<VideoDetailsProps> = (props) => {
                         })
                     }
                 } as MenuItem : undefined,
+                (hlsAudioTracks$().length > 1) ? {
+                    key: "Audio Track (" + hlsAudioTracks$().length + ")",
+                    value: (() => {
+                        const activeId = hlsAudioTrackId$() ?? hlsAudioTracks$().find(t => t.default)?.id ?? hlsAudioTracks$()[0]?.id;
+                        return hlsAudioTracks$().find(t => t.id === activeId)?.name;
+                    })(),
+                    type: "group",
+                    subMenu: {
+                        title: "Audio tracks",
+                        items: hlsAudioTracks$().map(t => {
+                            const activeId = hlsAudioTrackId$() ?? hlsAudioTracks$().find(x => x.default)?.id ?? hlsAudioTracks$()[0]?.id;
+                            return {
+                                name: t.lang ? `${t.name} (${t.lang})` : t.name,
+                                value: t.id,
+                                type: "option",
+                                onSelected: () => setHlsAudioTrackId(t.id),
+                                isSelected: activeId === t.id
+                            } as IMenuItemOption;
+                        })
+                    }
+                } as IMenuItemGroup : undefined,
                 (subtitleSources$() && subtitleSources$().length > 0 && videoSource$()) ? {
                     key: "Subtitle Sources (" + (subtitleSources$().length) + ")",
                     value: (videoSource$() && !videoSource$()?.subtitleIsLocal && videoSource$()!.subtitle >= 0) ? subtitleSources$()[videoSource$()!.subtitle]?.name : "None",
@@ -1500,7 +1523,17 @@ const VideoDetailView: Component<VideoDetailsProps> = (props) => {
                             onReady={setVideoPlayerViewHandle}
                             sourceQuality={videoQuality$()}
                             onPlayerQualityChanged={(number)=>{setPlayerQuality(number)}}
-                            onSettingsDialog={(ev) => onShowSettings()} 
+                            audioTrackId={hlsAudioTrackId$()}
+                            onAudioTracksChanged={(tracks) => {
+                                setHlsAudioTracks(tracks);
+                                if (tracks.length === 0)
+                                    setHlsAudioTrackId(undefined);
+                            }}
+                            onAudioTrackChanged={(id) => {
+                                if (hlsAudioTrackId$() === undefined)
+                                    setHlsAudioTrackId(id);
+                            }}
+                            onSettingsDialog={(ev) => onShowSettings()}
                             lockOverlay={showSettings$()} 
                             volume={video?.volume()}
                             playbackSpeed={playbackSpeed$()}
